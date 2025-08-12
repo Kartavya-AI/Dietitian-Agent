@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+gunicorn
+langchain
+langchain-google-genai
+langchain-community
+google-generativeai
+google-ai-generativelanguage
+pydantic
+pydantic[email]
+httpx
+requests
+python-dotenv
+python-multipart
+structlog
+cryptography
+python-jose[cryptography]
