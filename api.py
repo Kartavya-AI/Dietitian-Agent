@@ -8,11 +8,14 @@ from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, field_validator
 import uvicorn
+from dotenv import load_dotenv
 
 from tool import get_diet_agent_chain
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -21,14 +24,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Security
-security = HTTPBearer(auto_error=False)
-
 # Global variables for application state
 app_state = {
     "agent_chains": {},  # Store agent chains per session
     "memories": {},      # Store memories per session
-    "startup_time": None
+    "startup_time": None,
+    "api_key": None      # Store API key from environment
 }
 
 # Lifecycle management
@@ -38,6 +39,21 @@ async def lifespan(app: FastAPI):
     # Startup
     app_state["startup_time"] = datetime.now()
     logger.info("AI Dietitian API starting up...")
+    
+    # Get API key from environment
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        logger.error("No API key found in environment variables. Please set GEMINI_API_KEY or GOOGLE_API_KEY")
+        logger.error(f"Current environment variables: GEMINI_API_KEY={os.getenv('GEMINI_API_KEY')}, GOOGLE_API_KEY={os.getenv('GOOGLE_API_KEY')}")
+        raise RuntimeError("API key not found in environment variables")
+    
+    # Basic validation for Gemini API key format
+    if not api_key.startswith('AI'):
+        logger.error("Invalid API key format. Gemini API keys should start with 'AI'")
+        raise RuntimeError("Invalid API key format")
+    
+    app_state["api_key"] = api_key
+    logger.info("API key successfully loaded from environment")
     
     yield
     
@@ -117,24 +133,6 @@ class HealthResponse(BaseModel):
     uptime_seconds: float
     active_sessions: int
 
-# Dependency to get API key
-async def get_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Extract and validate API key from Authorization header"""
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key required. Provide Gemini API key in Authorization header as Bearer token"
-        )
-    
-    api_key = credentials.credentials
-    if not api_key or not api_key.startswith('AI'):  # Basic validation for Gemini API key format
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key format. Please provide a valid Gemini API key"
-        )
-    
-    return api_key
-
 # Error handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -179,10 +177,7 @@ async def health_check():
     )
 
 @app.post("/init-session", response_model=SessionResponse)
-async def initialize_session(
-    request: InitSessionRequest,
-    api_key: str = Depends(get_api_key)
-):
+async def initialize_session(request: InitSessionRequest):
     """Initialize a new chat session"""
     try:
         session_id = request.session_id
@@ -195,6 +190,9 @@ async def initialize_session(
                 message="Session already initialized",
                 timestamp=datetime.now()
             )
+        
+        # Get API key from app state
+        api_key = app_state["api_key"]
         
         # Initialize the agent chain and memory
         agent_chain, memory = get_diet_agent_chain(api_key)
@@ -220,14 +218,14 @@ async def initialize_session(
         )
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(
-    request: ChatRequest,
-    api_key: str = Depends(get_api_key)
-):
+async def chat(request: ChatRequest):
     """Main chat endpoint for interacting with the AI Dietitian"""
     try:
         session_id = request.session_id
         user_message = request.message
+        
+        # Get API key from app state
+        api_key = app_state["api_key"]
         
         # Check if session exists, if not initialize it
         if session_id not in app_state["agent_chains"]:
@@ -307,12 +305,13 @@ async def list_sessions():
         "timestamp": datetime.now().isoformat()
     }
 
+# Development server
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     uvicorn.run(
         "api:app",
         host="0.0.0.0",
         port=port,
-        reload=False,
+        reload=False,  # Set to False for production
         log_level="info"
     )
