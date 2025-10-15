@@ -25,7 +25,7 @@ def get_diet_agent_chain(api_key):
     """Initializes and returns the conversational chain."""
     
     # Alternative (Also Correct)
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", google_api_key=api_key)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key)
     
     # Langchain prompt template incorporates the system prompt and conversation history
     prompt = ChatPromptTemplate.from_messages([
