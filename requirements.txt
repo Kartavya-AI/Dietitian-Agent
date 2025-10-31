@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 gunicorn
 langchain
-langchain-core
+langchain-core==0.2.35
 langchain-google-genai
 langchain-community
 google-generativeai
