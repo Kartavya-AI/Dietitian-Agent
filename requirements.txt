@@ -3,7 +3,7 @@ uvicorn[standard]==0.30.1
 gunicorn==21.2.0
 
 langchain==0.2.14
-langchain-core==0.2.24
+langchain-core==0.2.35
 langchain-community==0.2.6
 langchain-google-genai==1.0.5
 
